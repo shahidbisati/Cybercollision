@@ -2,52 +2,63 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CyberStrike: Advanced Node</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>CyberStrike</title>
+    <link rel="manifest" href="manifest.json">
     <style>
         body {
-            margin: 0; padding: 0;
-            background-color: #050505;
+            margin: 0; padding: 0; background-color: #050505;
             display: flex; justify-content: center; align-items: center;
-            height: 100vh; color: #0ff;
-            font-family: 'Courier New', Courier, monospace;
-            overflow: hidden;
-            user-select: none;
+            height: 100vh; color: #0ff; font-family: 'Courier New', Courier, monospace;
+            overflow: hidden; user-select: none; touch-action: none; overscroll-behavior: none;
         }
         #gameContainer { position: relative; }
         canvas {
             background: #0d0e15; border: 2px solid #0ff;
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
             border-radius: 5px; cursor: crosshair;
+            max-width: 100vw; max-height: 100vh;
         }
         #ui {
             position: absolute; top: 10px; left: 10px; right: 10px;
-            display: flex; justify-content: space-between;
-            pointer-events: none; text-shadow: 0 0 5px #0ff;
+            display: none; /* Hidden on Start Menu */
+            justify-content: space-between;
+            pointer-events: none; text-shadow: 0 0 5px #0ff; z-index: 10;
         }
-        #controls {
-            position: absolute; bottom: 10px; right: 10px;
+        #controls { 
+            position: absolute; bottom: 10px; right: 10px; z-index: 10; 
+            display: none; /* Hidden on Start Menu */
         }
         button {
-            background: rgba(13, 14, 21, 0.8); color: #0ff;
-            border: 1px solid #0ff; padding: 8px 15px;
-            font-family: inherit; font-size: 14px; cursor: pointer;
-            transition: all 0.2s; text-transform: uppercase;
+            background: rgba(13, 14, 21, 0.9); color: #0ff;
+            border: 1px solid #0ff; padding: 12px 20px;
+            font-family: inherit; font-size: 16px; cursor: pointer;
+            text-transform: uppercase; touch-action: manipulation;
+            transition: all 0.2s;
         }
         button:hover { background: #0ff; color: #000; }
-        button:active { transform: scale(0.95); }
+        button:disabled { border-color: #555; color: #555; background: transparent; cursor: not-allowed; }
         
-        /* Overlays */
         .overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(5, 5, 5, 0.9); display: none;
+            background: rgba(5, 5, 5, 0.95); display: none;
             flex-direction: column; justify-content: center; align-items: center;
-            border: 2px solid #ff00ff; box-sizing: border-box;
+            border: 2px solid #0ff; box-sizing: border-box; z-index: 20;
+            text-align: center;
         }
-        .shop-item {
-            display: flex; justify-content: space-between; width: 250px;
-            margin: 10px 0; padding: 10px; border: 1px solid #0ff;
+        /* Start Menu specific styles */
+        #startMenu { display: flex; border-color: #ff00ff; }
+        #startMenu h1 { font-size: 2.5em; text-shadow: 0 0 15px #ff00ff; color: #ff00ff; margin-bottom: 5px; }
+        #startMenu p { color: #0ff; margin-bottom: 30px; }
+        
+        .upgrade-item {
+            display: flex; flex-direction: column; align-items: center;
+            width: 280px; margin: 10px 0; padding: 15px; border: 1px solid #0ff;
+            background: rgba(13, 14, 21, 0.5);
         }
+        .upgrade-header { display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px;}
     </style>
 </head>
 <body>
@@ -55,95 +66,208 @@
 <div id="gameContainer">
     <div id="ui">
         <div>LVL: <span id="levelDisplay">1</span> | BALLS: <span id="ballDisplay">1</span></div>
-        <div>DATA (Coins): <span id="coinDisplay">0</span></div>
+        <div>DATA: <span id="coinDisplay">0</span></div>
     </div>
-    
     <div id="controls">
-        <button id="ffBtn" onmousedown="setFastForward(true)" onmouseup="setFastForward(false)" onmouseleave="setFastForward(false)">>> SPEED</button>
-        <button onclick="toggleShop()">SHOP</button>
+        <button id="ffBtn">>> SPEED</button>
+        <button onclick="toggleUpgrades()">UPGRADES</button>
     </div>
 
     <canvas id="gameCanvas" width="400" height="600"></canvas>
 
-    <div id="shopScreen" class="overlay">
-        <h2>SKIN PROTOCOLS</h2>
-        <div id="shopList"></div>
-        <button onclick="toggleShop()" style="margin-top: 20px;">EXIT</button>
+    <div id="startMenu" class="overlay">
+        <h1>CYBERSTRIKE</h1>
+        <p>AWAITING COMMAND...</p>
+        <p>Stored Data: <span id="startCoinDisplay">0</span></p>
+        <button onclick="initializeGame()" style="margin-bottom: 15px; border-color: #ff00ff; color: #ff00ff;">INITIALIZE</button>
+        <button onclick="toggleUpgrades()">UPGRADE SYSTEM</button>
     </div>
 
-    <div id="gameOver" class="overlay">
-        <h2>SYSTEM FAILURE</h2>
+    <div id="upgradeScreen" class="overlay">
+        <h2 style="color: #ffaa00;">SYSTEM UPGRADES</h2>
+        <p>Available Data: <span id="upgradeCoinDisplay">0</span></p>
+        <div id="upgradeList"></div>
+        <button onclick="closeUpgrades()" style="margin-top: 20px;">RETURN</button>
+    </div>
+
+    <div id="gameOver" class="overlay" style="border-color: #ff00ff;">
+        <h2 style="color: #ff00ff;">SYSTEM FAILURE</h2>
         <p>Max Level: <span id="finalLevel"></span></p>
-        <button onclick="resetGame()">REBOOT</button>
+        <button onclick="resetToMenu()">REBOOT TO MENU</button>
     </div>
 </div>
 
 <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(err => console.log('SW failed:', err)); });
+    }
+
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const ui = document.getElementById('ui');
+    const controls = document.getElementById('controls');
+    
+    // Screens
+    const startMenu = document.getElementById('startMenu');
+    const upgradeScreen = document.getElementById('upgradeScreen');
+    const gameOverScreen = document.getElementById('gameOver');
+    
+    // Displays
     const levelDisplay = document.getElementById('levelDisplay');
     const ballDisplay = document.getElementById('ballDisplay');
     const coinDisplay = document.getElementById('coinDisplay');
-    const gameOverScreen = document.getElementById('gameOver');
-    const shopScreen = document.getElementById('shopScreen');
-    const finalLevelDisplay = document.getElementById('finalLevel');
+    const startCoinDisplay = document.getElementById('startCoinDisplay');
+    const upgradeCoinDisplay = document.getElementById('upgradeCoinDisplay');
 
-    // --- Configuration ---
+    // Constants
     const BALL_RADIUS = 6;
     const BASE_SPEED = 10;
     const RETURN_SPEED = 15;
-    const BRICK_ROWS = 9;
     const BRICK_COLS = 7;
     const PADDING = 4;
     const B_WIDTH = (canvas.width - (PADDING * (BRICK_COLS + 1))) / BRICK_COLS;
     const B_HEIGHT = 40;
     
-    // --- State Management ---
-    const STATE = { AIMING: 0, FIRING: 1, UPDATING: 2, GAMEOVER: 3, SHOP: 4 };
-    let currentState = STATE.AIMING;
+    // Updated State Machine
+    const STATE = { MENU: 0, AIMING: 1, FIRING: 2, UPDATING: 3, GAMEOVER: 4, UPGRADE: 5 };
+    let currentState = STATE.MENU;
+    let prevState = STATE.MENU; // Keeps track of where to return from upgrade screen
+    
     let level = 1, totalBalls = 1, ballsToAdd = 0, coins = 0;
     let isFastForward = false;
-    let timeScale = 1;
     
-    // --- Data Persistence (LocalStorage) ---
-    const SKINS = [
-        { id: 0, name: 'Cyan Orb', color: '#00ffff', cost: 0 },
-        { id: 1, name: 'Magenta Core', color: '#ff00ff', cost: 50 },
-        { id: 2, name: 'Toxic Node', color: '#00ff00', cost: 100 },
-        { id: 3, name: 'Solar Flare', color: '#ffaa00', cost: 200 }
-    ];
-    let unlockedSkins = [0];
-    let equippedSkin = 0;
+    // Progression System
+    let payloadLevel = 1;
+    const payloadMaxLevel = 10;
+    const payloadBaseCost = 50;
+
+    function getUpgradeCost() {
+        return payloadBaseCost * payloadLevel;
+    }
 
     function loadData() {
-        const saved = localStorage.getItem('cyberStrikeData');
+        const saved = localStorage.getItem('cyberStrikeDataV2');
         if (saved) {
             const data = JSON.parse(saved);
             coins = data.coins || 0;
-            unlockedSkins = data.unlockedSkins || [0];
-            equippedSkin = data.equippedSkin || 0;
+            payloadLevel = data.payloadLevel || 1;
         }
         updateUI();
     }
-    
+
     function saveData() {
-        localStorage.setItem('cyberStrikeData', JSON.stringify({ coins, unlockedSkins, equippedSkin }));
+        localStorage.setItem('cyberStrikeDataV2', JSON.stringify({ coins, payloadLevel }));
         updateUI();
     }
 
-    // --- Entities ---
-    let balls = [];
-    let bricks = [];
-    let lasers = []; // Temporary laser beam visual effects
+    let balls = [], bricks = [], lasers = [];
     let startPos = { x: canvas.width / 2, y: canvas.height - BALL_RADIUS };
     let nextStartPos = null;
     let mouse = { x: 0, y: 0, isDown: false };
 
+    // --- State Transitions ---
+
+    function initializeGame() {
+        currentState = STATE.AIMING;
+        startMenu.style.display = 'none';
+        ui.style.display = 'flex';
+        controls.style.display = 'block';
+        
+        level = 1;
+        totalBalls = payloadLevel; // Start with upgraded amount!
+        ballsToAdd = 0;
+        bricks = [];
+        lasers = [];
+        startPos = { x: canvas.width / 2, y: canvas.height - BALL_RADIUS };
+        
+        initBalls();
+        generateRow();
+    }
+
+    function resetToMenu() {
+        currentState = STATE.MENU;
+        gameOverScreen.style.display = 'none';
+        ui.style.display = 'none';
+        controls.style.display = 'none';
+        startMenu.style.display = 'flex';
+        bricks = [];
+        lasers = [];
+        balls = [];
+        updateUI();
+    }
+
+    function toggleUpgrades() {
+        prevState = currentState; // Remember if we came from Menu or Game
+        currentState = STATE.UPGRADE;
+        if (prevState === STATE.MENU) startMenu.style.display = 'none';
+        else controls.style.display = 'none';
+        
+        upgradeScreen.style.display = 'flex';
+        renderUpgrades();
+    }
+
+    function closeUpgrades() {
+        currentState = prevState;
+        upgradeScreen.style.display = 'none';
+        
+        if (currentState === STATE.MENU) {
+            startMenu.style.display = 'flex';
+        } else {
+            controls.style.display = 'block';
+        }
+        updateUI();
+    }
+
+    function buyPayloadUpgrade() {
+        const cost = getUpgradeCost();
+        if (coins >= cost && payloadLevel < payloadMaxLevel) {
+            coins -= cost;
+            payloadLevel++;
+            saveData();
+            renderUpgrades();
+        }
+    }
+
+    function renderUpgrades() {
+        const list = document.getElementById('upgradeList');
+        list.innerHTML = '';
+        const cost = getUpgradeCost();
+        
+        const div = document.createElement('div');
+        div.className = 'upgrade-item';
+        
+        let btnHTML = '';
+        if (payloadLevel >= payloadMaxLevel) {
+            btnHTML = `<button disabled>MAX LEVEL REACHED</button>`;
+        } else if (coins >= cost) {
+            btnHTML = `<button onclick="buyPayloadUpgrade()" style="color:#0f0; border-color:#0f0;">UPGRADE (${cost} DATA)</button>`;
+        } else {
+            btnHTML = `<button disabled>NEED ${cost} DATA</button>`;
+        }
+
+        div.innerHTML = `
+            <div class="upgrade-header">
+                <span style="color:#ffaa00; font-weight:bold;">PAYLOAD</span>
+                <span>LVL ${payloadLevel}/${payloadMaxLevel}</span>
+            </div>
+            <p style="font-size: 12px; text-align:center; margin:5px 0 15px 0; color:#aaa;">Permanently increases starting balls.</p>
+            ${btnHTML}
+        `;
+        list.appendChild(div);
+    }
+
+    function updateUI() { 
+        levelDisplay.innerText = level; 
+        ballDisplay.innerText = totalBalls; 
+        coinDisplay.innerText = coins; 
+        startCoinDisplay.innerText = coins;
+        upgradeCoinDisplay.innerText = coins;
+    }
+
+    // --- Core Logic ---
     function initBalls() {
         balls = [];
-        for (let i = 0; i < totalBalls; i++) {
-            balls.push({ x: startPos.x, y: startPos.y, dx: 0, dy: 0, active: false, returning: false });
-        }
+        for (let i = 0; i < totalBalls; i++) balls.push({ x: startPos.x, y: startPos.y, dx: 0, dy: 0, active: false, returning: false });
         updateUI();
     }
 
@@ -152,156 +276,139 @@
             let rand = Math.random();
             let x = (c * (B_WIDTH + PADDING)) + PADDING;
             let y = 50;
-            let cx = x + B_WIDTH/2;
-            let cy = y + B_HEIGHT/2;
+            let cx = x + B_WIDTH/2, cy = y + B_HEIGHT/2;
 
-            if (rand > 0.5) {
-                bricks.push({ x, y, hits: level, type: 'brick', color: `hsl(${280 + Math.random()*60}, 100%, 50%)`, col: c, row: 0 });
-            } else if (rand > 0.4) {
-                bricks.push({ x: cx, y: cy, radius: 12, type: 'powerup_ball' });
-            } else if (rand > 0.35) {
-                bricks.push({ x: cx, y: cy, radius: 10, type: 'coin' });
-            } else if (rand > 0.3) {
-                bricks.push({ x: cx, y: cy, radius: 14, type: 'laser_h' }); // Horizontal Laser
-            } else if (rand > 0.28) {
-                bricks.push({ x: cx, y: cy, radius: 14, type: 'laser_v' }); // Vertical Laser
-            }
+            if (rand > 0.5) bricks.push({ x, y, hits: level, type: 'brick', color: `hsl(${280 + Math.random()*60}, 100%, 50%)` });
+            else if (rand > 0.4) bricks.push({ x: cx, y: cy, radius: 12, type: 'powerup_ball' });
+            else if (rand > 0.35) bricks.push({ x: cx, y: cy, radius: 10, type: 'coin' });
+            else if (rand > 0.3) bricks.push({ x: cx, y: cy, radius: 14, type: 'laser_h' });
+            else if (rand > 0.28) bricks.push({ x: cx, y: cy, radius: 14, type: 'laser_v' });
         }
-        // Update logical rows for laser targeting
-        bricks.forEach(b => { if (b.type === 'brick') b.row++; });
     }
 
     function triggerLaser(entity, type) {
-        let hitList = [];
-        lasers.push({ x: entity.x, y: entity.y, type: type, life: 30 }); // Visual effect
-
-        if (type === 'laser_h') {
-            hitList = bricks.filter(b => b.type === 'brick' && Math.abs((b.y + B_HEIGHT/2) - entity.y) < B_HEIGHT);
-        } else {
-            hitList = bricks.filter(b => b.type === 'brick' && Math.abs((b.x + B_WIDTH/2) - entity.x) < B_WIDTH);
-        }
+        lasers.push({ x: entity.x, y: entity.y, type: type, life: 30 });
+        let hitList = type === 'laser_h' 
+            ? bricks.filter(b => b.type === 'brick' && Math.abs((b.y + B_HEIGHT/2) - entity.y) < B_HEIGHT)
+            : bricks.filter(b => b.type === 'brick' && Math.abs((b.x + B_WIDTH/2) - entity.x) < B_WIDTH);
         
-        hitList.forEach(b => {
-            b.hits -= Math.ceil(level * 0.5); // Laser does 50% of current level damage
-            if(b.hits < 0) b.hits = 0;
-        });
+        hitList.forEach(b => { b.hits -= Math.ceil(level * 0.5); if(b.hits < 0) b.hits = 0; });
     }
 
-    // --- Core Mechanics ---
-    function checkCollision(ball, brick) {
-        let testX = ball.x, testY = ball.y;
-        if (ball.x < brick.x) testX = brick.x; else if (ball.x > brick.x + B_WIDTH) testX = brick.x + B_WIDTH; 
-        if (ball.y < brick.y) testY = brick.y; else if (ball.y > brick.y + B_HEIGHT) testY = brick.y + B_HEIGHT; 
-        
-        let distX = ball.x - testX, distY = ball.y - testY;
-        if (Math.sqrt((distX*distX) + (distY*distY)) <= ball.radius) {
-            if (Math.abs(distX) > Math.abs(distY)) ball.dx *= -1; else ball.dy *= -1;
-            return true;
-        }
-        return false;
-    }
-
-    // --- Input & Controls ---
-    canvas.addEventListener('mousedown', () => { if (currentState === STATE.AIMING) mouse.isDown = true; });
-    canvas.addEventListener('mousemove', (e) => {
+    // --- Input Handling ---
+    function updatePointerPos(e) {
         const rect = canvas.getBoundingClientRect();
-        mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top;
-    });
-    canvas.addEventListener('mouseup', () => {
-        if (currentState === STATE.AIMING && mouse.isDown) {
-            mouse.isDown = false; fireBalls();
+        let clientX, clientY;
+        if (e.changedTouches && e.changedTouches.length > 0) {
+            clientX = e.changedTouches[0].clientX; clientY = e.changedTouches[0].clientY;
+        } else {
+            clientX = e.clientX; clientY = e.clientY;
         }
-    });
-
-    function setFastForward(active) {
-        isFastForward = active;
-        timeScale = active ? 2.5 : 1;
+        mouse.x = (clientX - rect.left) * (canvas.width / rect.width);
+        mouse.y = (clientY - rect.top) * (canvas.height / rect.height);
     }
+
+    function handlePointerDown(e) { if (currentState === STATE.AIMING) { mouse.isDown = true; updatePointerPos(e); } }
+    function handlePointerMove(e) { if (mouse.isDown) updatePointerPos(e); }
+    function handlePointerUp(e) {
+        if (currentState === STATE.AIMING && mouse.isDown) {
+            updatePointerPos(e); mouse.isDown = false; fireBalls();
+        }
+    }
+
+    canvas.addEventListener('mousedown', handlePointerDown);
+    canvas.addEventListener('mousemove', handlePointerMove);
+    canvas.addEventListener('mouseup', handlePointerUp);
+    canvas.addEventListener('mouseleave', () => { mouse.isDown = false; });
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handlePointerDown(e); }, {passive: false});
+    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handlePointerMove(e); }, {passive: false});
+    canvas.addEventListener('touchend', (e) => { e.preventDefault(); handlePointerUp(e); }, {passive: false});
+
+    const ffBtn = document.getElementById('ffBtn');
+    const setFFTrue = (e) => { e.preventDefault(); isFastForward = true; };
+    const setFFFalse = (e) => { e.preventDefault(); isFastForward = false; };
+    ffBtn.addEventListener('mousedown', setFFTrue);
+    ffBtn.addEventListener('touchstart', setFFTrue, {passive: false});
+    ffBtn.addEventListener('mouseup', setFFFalse);
+    ffBtn.addEventListener('mouseleave', setFFFalse);
+    ffBtn.addEventListener('touchend', setFFFalse, {passive: false});
 
     function fireBalls() {
         let dx = mouse.x - startPos.x, dy = mouse.y - startPos.y;
-        if (dy >= -10) return; // Prevent firing too flat or downwards
-
+        if (dy >= -5) return; 
         let angle = Math.atan2(dy, dx);
+        if (angle < -Math.PI + 0.1) angle = -Math.PI + 0.1;
+        if (angle > -0.1) angle = -0.1;
+
         currentState = STATE.FIRING;
         nextStartPos = null;
 
         balls.forEach((ball, index) => {
             setTimeout(() => {
                 ball.x = startPos.x; ball.y = startPos.y;
-                ball.dx = Math.cos(angle) * BASE_SPEED;
-                ball.dy = Math.sin(angle) * BASE_SPEED;
+                ball.dx = Math.cos(angle) * BASE_SPEED; ball.dy = Math.sin(angle) * BASE_SPEED;
                 ball.active = true;
             }, index * 80);
         });
     }
 
-    // --- Main Update Logic ---
+    function handleCollisions(ball) {
+        for (let i = bricks.length - 1; i >= 0; i--) {
+            let entity = bricks[i];
+            if (entity.type === 'brick') {
+                let testX = ball.x, testY = ball.y;
+                if (ball.x < entity.x) testX = entity.x; else if (ball.x > entity.x + B_WIDTH) testX = entity.x + B_WIDTH; 
+                if (ball.y < entity.y) testY = entity.y; else if (ball.y > entity.y + B_HEIGHT) testY = entity.y + B_HEIGHT; 
+                let distX = ball.x - testX, distY = ball.y - testY;
+                let distance = Math.sqrt((distX*distX) + (distY*distY));
+
+                if (distance <= ball.radius) {
+                    let overlap = ball.radius - distance;
+                    if (distance > 0) { ball.x += (distX / distance) * overlap; ball.y += (distY / distance) * overlap; }
+                    if (Math.abs(distX) > Math.abs(distY)) ball.dx *= -1; else ball.dy *= -1;
+                    entity.hits--; if (entity.hits <= 0) bricks.splice(i, 1);
+                    return; 
+                }
+            } else {
+                if (Math.hypot(ball.x - entity.x, ball.y - entity.y) < ball.radius + entity.radius) {
+                    if (entity.type === 'powerup_ball') ballsToAdd++;
+                    if (entity.type === 'coin') { coins++; saveData(); }
+                    if (entity.type === 'laser_h' || entity.type === 'laser_v') triggerLaser(entity, entity.type);
+                    bricks.splice(i, 1);
+                }
+            }
+        }
+    }
+
     function updateLogic() {
         if (currentState !== STATE.FIRING) return;
+        let activeCount = 0, speedSteps = isFastForward ? 3 : 1; 
 
-        let activeCount = 0;
-        let speedMult = timeScale; // Run physics loop multiple times to prevent tunneling
-
-        for(let step = 0; step < speedMult; step++) {
+        for(let step = 0; step < speedSteps; step++) {
             activeCount = 0;
-
             balls.forEach(ball => {
                 if (!ball.active && !ball.returning) return;
                 activeCount++;
-
                 if (ball.returning) {
-                    // Smooth Return Logic
                     let dir = nextStartPos.x > ball.x ? 1 : -1;
                     ball.x += dir * RETURN_SPEED;
-                    if (Math.abs(ball.x - nextStartPos.x) <= RETURN_SPEED) {
-                        ball.x = nextStartPos.x;
-                        ball.returning = false;
-                    }
-                    return; // Skip normal physics if returning
+                    if (Math.abs(ball.x - nextStartPos.x) <= RETURN_SPEED) { ball.x = nextStartPos.x; ball.returning = false; }
+                    return; 
                 }
-
                 ball.x += ball.dx; ball.y += ball.dy;
-
-                // Walls
-                if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvas.width) { ball.dx *= -1; ball.x += ball.dx; }
-                if (ball.y - ball.radius < 0) { ball.dy *= -1; ball.y += ball.dy; }
-
-                // Floor
+                if (ball.x - ball.radius < 0) { ball.x = ball.radius; ball.dx *= -1; }
+                if (ball.x + ball.radius > canvas.width) { ball.x = canvas.width - ball.radius; ball.dx *= -1; }
+                if (ball.y - ball.radius < 0) { ball.y = ball.radius; ball.dy *= -1; }
                 if (ball.y + ball.radius >= canvas.height) {
-                    ball.active = false;
-                    ball.y = canvas.height - ball.radius;
+                    ball.active = false; ball.y = canvas.height - ball.radius;
                     if (nextStartPos === null) nextStartPos = { x: ball.x, y: ball.y };
                     ball.returning = true;
                 }
-
-                // Entity Collision
-                for (let i = bricks.length - 1; i >= 0; i--) {
-                    let entity = bricks[i];
-
-                    if (entity.type === 'brick') {
-                        if (checkCollision(ball, entity)) {
-                            entity.hits--;
-                            if (entity.hits <= 0) bricks.splice(i, 1);
-                        }
-                    } else {
-                        // Circular Powerups/Coins
-                        if (Math.hypot(ball.x - entity.x, ball.y - entity.y) < ball.radius + entity.radius) {
-                            if (entity.type === 'powerup_ball') ballsToAdd++;
-                            if (entity.type === 'coin') { coins++; saveData(); }
-                            if (entity.type === 'laser_h' || entity.type === 'laser_v') triggerLaser(entity, entity.type);
-                            bricks.splice(i, 1);
-                        }
-                    }
-                }
+                handleCollisions(ball);
             });
-
-            // Clean up dead lasers
-            lasers.forEach(l => l.life--);
-            lasers = lasers.filter(l => l.life > 0);
+            lasers.forEach(l => l.life--); lasers = lasers.filter(l => l.life > 0);
         }
 
-        // End Round
         if (activeCount === 0) {
             startPos = nextStartPos || startPos;
             totalBalls += ballsToAdd; ballsToAdd = 0;
@@ -314,137 +421,61 @@
         bricks.forEach(entity => {
             entity.y += B_HEIGHT + PADDING;
             if (entity.y + B_HEIGHT >= canvas.height && entity.type === 'brick') {
-                currentState = STATE.GAMEOVER;
-                gameOverScreen.style.display = 'flex';
-                finalLevelDisplay.innerText = level;
+                currentState = STATE.GAMEOVER; ui.style.display = 'none'; controls.style.display = 'none';
+                gameOverScreen.style.display = 'flex'; document.getElementById('finalLevel').innerText = level;
             }
         });
-
-        // Filter out powerups that fell off screen
         bricks = bricks.filter(b => b.y < canvas.height + 50);
-
-        if (currentState !== STATE.GAMEOVER) {
-            generateRow();
-            currentState = STATE.AIMING;
-            saveData();
-        }
-    }
-
-    function resetGame() {
-        level = 1; totalBalls = 1; ballsToAdd = 0; bricks = []; lasers = [];
-        startPos = { x: canvas.width / 2, y: canvas.height - BALL_RADIUS };
-        currentState = STATE.AIMING;
-        gameOverScreen.style.display = 'none';
-        initBalls(); generateRow();
-    }
-
-    // --- UI and Shop Logic ---
-    function updateUI() {
-        levelDisplay.innerText = level;
-        ballDisplay.innerText = totalBalls;
-        coinDisplay.innerText = coins;
-    }
-
-    function toggleShop() {
-        if (currentState === STATE.GAMEOVER || currentState === STATE.FIRING) return;
-        
-        if (currentState === STATE.SHOP) {
-            shopScreen.style.display = 'none';
-            currentState = STATE.AIMING;
-        } else {
-            currentState = STATE.SHOP;
-            shopScreen.style.display = 'flex';
-            renderShop();
-        }
-    }
-
-    function renderShop() {
-        const list = document.getElementById('shopList');
-        list.innerHTML = '';
-        SKINS.forEach(skin => {
-            const div = document.createElement('div');
-            div.className = 'shop-item';
-            
-            let btnHTML = '';
-            if (equippedSkin === skin.id) {
-                btnHTML = `<button disabled style="border-color:#555; color:#555;">EQUIPPED</button>`;
-            } else if (unlockedSkins.includes(skin.id)) {
-                btnHTML = `<button onclick="equipSkin(${skin.id})">EQUIP</button>`;
-            } else {
-                btnHTML = `<button onclick="buySkin(${skin.id}, ${skin.cost})">${skin.cost} DATA</button>`;
-            }
-
-            div.innerHTML = `<span style="color:${skin.color}; line-height:35px;">■ ${skin.name}</span> ${btnHTML}`;
-            list.appendChild(div);
-        });
-    }
-
-    function buySkin(id, cost) {
-        if (coins >= cost) {
-            coins -= cost;
-            unlockedSkins.push(id);
-            saveData(); renderShop();
-        }
-    }
-
-    function equipSkin(id) {
-        equippedSkin = id;
-        saveData(); renderShop();
+        if (currentState !== STATE.GAMEOVER) { generateRow(); currentState = STATE.AIMING; saveData(); }
     }
 
     // --- Rendering ---
     function drawGlow(color, blur) { ctx.shadowBlur = blur; ctx.shadowColor = color; }
 
     function draw() {
+        // Draw background even on menu
         ctx.fillStyle = isFastForward ? 'rgba(13, 14, 21, 0.2)' : 'rgba(13, 14, 21, 0.4)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Aiming Line
+        if (currentState === STATE.MENU || currentState === STATE.UPGRADE) {
+            // Draw decorative background grid or particles here if desired
+            return;
+        }
+
         if (currentState === STATE.AIMING && mouse.isDown) {
             ctx.beginPath(); ctx.moveTo(startPos.x, startPos.y); ctx.lineTo(mouse.x, mouse.y);
-            ctx.strokeStyle = SKINS[equippedSkin].color;
-            ctx.setLineDash([5, 15]); ctx.lineWidth = 2;
-            drawGlow(SKINS[equippedSkin].color, 5); ctx.stroke();
+            ctx.strokeStyle = '#00ffff'; ctx.setLineDash([5, 15]); ctx.lineWidth = 2;
+            drawGlow('#00ffff', 5); ctx.stroke();
             ctx.setLineDash([]); drawGlow('transparent', 0);
         }
 
-        // Draw Lasers
         lasers.forEach(l => {
             ctx.fillStyle = `rgba(0, 255, 255, ${l.life / 30})`;
             if (l.type === 'laser_h') ctx.fillRect(0, l.y - 2, canvas.width, 4);
             else ctx.fillRect(l.x - 2, 0, 4, canvas.height);
         });
 
-        // Entities
         bricks.forEach(entity => {
             if (entity.type === 'brick') {
                 ctx.fillStyle = '#111'; ctx.fillRect(entity.x, entity.y, B_WIDTH, B_HEIGHT);
                 ctx.strokeStyle = entity.color; ctx.lineWidth = 2;
                 drawGlow(entity.color, 10); ctx.strokeRect(entity.x, entity.y, B_WIDTH, B_HEIGHT);
                 drawGlow('transparent', 0);
-                
                 ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Courier New';
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.fillText(entity.hits, entity.x + B_WIDTH/2, entity.y + B_HEIGHT/2);
             } else {
                 ctx.beginPath(); ctx.arc(entity.x, entity.y, entity.radius, 0, Math.PI * 2);
-                
-                if (entity.type === 'powerup_ball') {
-                    ctx.strokeStyle = '#0f0'; drawGlow('#0f0', 10);
-                } else if (entity.type === 'coin') {
-                    ctx.strokeStyle = '#ffaa00'; drawGlow('#ffaa00', 10);
-                } else if (entity.type.startsWith('laser')) {
-                    ctx.strokeStyle = '#0ff'; drawGlow('#0ff', 10);
-                }
-                
+                if (entity.type === 'powerup_ball') { ctx.strokeStyle = '#0f0'; drawGlow('#0f0', 10); } 
+                else if (entity.type === 'coin') { ctx.strokeStyle = '#ffaa00'; drawGlow('#ffaa00', 10); } 
+                else if (entity.type.startsWith('laser')) { ctx.strokeStyle = '#0ff'; drawGlow('#0ff', 10); }
                 ctx.lineWidth = 2; ctx.stroke();
                 ctx.beginPath(); ctx.arc(entity.x, entity.y, entity.radius - 4, 0, Math.PI*2);
                 ctx.fillStyle = ctx.strokeStyle; ctx.fill(); drawGlow('transparent', 0);
             }
         });
 
-        // Balls
-        ctx.fillStyle = SKINS[equippedSkin].color;
+        ctx.fillStyle = '#00ffff';
         drawGlow(ctx.fillStyle, 8);
         balls.forEach(ball => {
             if (ball.active || currentState === STATE.AIMING || ball.returning) {
@@ -455,17 +486,12 @@
     }
 
     function gameLoop() {
-        if (currentState !== STATE.GAMEOVER && currentState !== STATE.SHOP) updateLogic();
-        draw();
+        if (currentState === STATE.FIRING) updateLogic();
+        draw(); 
         requestAnimationFrame(gameLoop);
     }
 
-    // --- Boot ---
-    loadData();
-    initBalls();
-    generateRow();
-    gameLoop();
-
+    loadData(); gameLoop();
 </script>
 </body>
 </html>
